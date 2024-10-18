@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        maven 'maven3.9.3'
+    }
+
+    stages {
+        stage('mvn compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+        stage('mvn test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+        stage('file system scan') {
+            steps {
+                sh 'trivy fs --format table -o trivy-fs-report.html .'
+            }
+        }
+        stage('mvn package') {
+            steps {
+                sh 'mvn package'
+            }
+        }
+        stage('build docker image') {
+            steps {
+                script {
+                    sh 'docker build -t moatazelbasha/bankapp:0.1 .'
+                }
+            }
+        }
+        stage('scan docker image') {
+            steps {
+                sh 'trivy image --format table -o trivy-fs-report.html moatazelbasha/bankapp:0.1'
+            }
+        }
+        stage('push docker image') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker', url: 'https://github.com/MoatazElbasha/DEPI-Project.git') {
+                        sh 'docker push moatazelbasha/bankapp:0.1'
+                    }
+                }
+            }
+        }
+    }
+}
+

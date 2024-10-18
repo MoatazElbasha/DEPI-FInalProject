@@ -1,0 +1,62 @@
+---
+- name: Install and Run Prometheus on AWS Instance
+  hosts: aws_instances
+  become: yes  # Ensure that tasks are run as root
+  vars:
+    prometheus_version: "2.53.2"  # Specify the desired version
+    prometheus_config_dir: "/etc/prometheus"
+    prometheus_data_dir: "/var/lib/prometheus"
+
+  tasks:
+    - name: Create Prometheus directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ prometheus_config_dir }}"
+        - "{{ prometheus_data_dir }}"
+
+    - name: Download Prometheus
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+        dest: /tmp/prometheus.tar.gz
+
+    - name: Extract Prometheus
+      ansible.builtin.unarchive:
+        src: /tmp/prometheus.tar.gz
+        dest: /tmp/
+        remote_src: yes
+
+    - name: Move Prometheus binary to /usr/local/bin
+      ansible.builtin.command:
+        cmd: mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus /usr/local/bin/
+
+    - name: Move Promtool binary to /usr/local/bin
+      ansible.builtin.command:
+        cmd: mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/promtool /usr/local/bin/
+
+    - name: Copy Prometheus configuration file
+      ansible.builtin.copy:
+        dest: "{{ prometheus_config_dir }}/prometheus.yml"
+        content: |
+          global:
+            scrape_interval: 15s  # Set the default scrape interval to every 15 seconds.
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+    - name: Start Prometheus
+      ansible.builtin.shell: |
+        nohup /usr/local/bin/prometheus \
+          --config.file={{ prometheus_config_dir }}/prometheus.yml \
+          --storage.tsdb.path={{ prometheus_data_dir }} \
+          --web.listen-address=":9090" > /var/log/prometheus.log 2>&1 &
+
+    - name: Ensure Prometheus is running
+      ansible.builtin.uri:
+        url: "http://localhost:9090"
+        status_code: 200
+        timeout: 10
+

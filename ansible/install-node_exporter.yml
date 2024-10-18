@@ -1,0 +1,37 @@
+---
+- name: install and run node-exporter
+  hosts: aws_instances
+  become: true
+  tasks:
+    - name: Downloading node_exporter
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.8.2/node_exporter-1.8.2.linux-amd64.tar.gz
+        dest: /home/ubuntu/node_exporter-1.8.2.linux-amd64.tar.gz
+
+    - name: extracting node_exporter file
+      unarchive:
+        src: /home/ubuntu/node_exporter-1.8.2.linux-amd64.tar.gz
+        dest: /home/ubuntu/
+        remote_src: yes
+
+    - name: copy node_exporter binary file
+      command: cp /home/ubuntu/node_exporter-1.8.2.linux-amd64/node_exporter /usr/local/bin/
+
+    - name: copy node_exporter unit file to all server
+      template:
+        src: node_exporter-template.j2
+        dest: /etc/systemd/system/node_exporter.service
+
+    - name: reload unit file
+      command: systemctl daemon-reload
+
+    - name: Start Node Exporter
+      ansible.builtin.service:
+        name: node_exporter
+        state: started
+
+    - name: Enable Node Exporter to start on boot
+      ansible.builtin.service:
+        name: node_exporter
+        enabled: true
+
